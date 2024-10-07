@@ -4,25 +4,24 @@ import java.net.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ChatServer {
-    public static ConcurrentHashMap<String, PrintWriter> writerName = new ConcurrentHashMap<>();
+    public static ConcurrentHashMap<String, PrintWriter> writerName = new ConcurrentHashMap<>(); // maps usernames to their PrintWriters for efficiency
     public static void main(String[] args) throws IOException {
-        if (args.length != 1) {
+        if (args.length != 1) { // program stops if server not initiated correctly
             System.err.println("Correct usage: java ChatServer <portNumber>");
             System.exit(0);
         }
         int pNum = Integer.parseInt(args[0]); // take port number as an arg
         System.out.println("> Chat room hosted on " + InetAddress.getLocalHost().getHostName() + ", using port " + pNum + ", online."); // online msg
-
         try {
             ServerSocket servSock = new ServerSocket(pNum); // new server socket
-            while (true) { // continually accept connections
-                Socket cliSock = servSock.accept();
-                System.out.println("> Client from " + cliSock.getInetAddress().getHostName() + " connected.");
-                Handler h = new Handler(cliSock); // new handler
+            while (true) { // accept connections as long as they come
+                Socket cliSock = servSock.accept(); // accept the new client
+                System.out.println("> Client from " + cliSock.getInetAddress().getHostName() + " connected."); // socket message
+                Handler h = new Handler(cliSock); // new handler for THIS client
                 h.start();
             }
         } catch (IOException e) {
-            System.err.println("> Couldn't start the server.");
+            System.err.println("> Couldn't start the server."); // unknown exception catch
             System.exit(0);
         }
     }
@@ -34,21 +33,21 @@ class Handler extends Thread {
     private BufferedReader br;
     private String name;
 
-    public Handler(Socket q) { s = q; }
+    public Handler(Socket q) { s = q; } // this socket for this handler object
 
     public void run() {
         try {
-            pw = new PrintWriter(new OutputStreamWriter(s.getOutputStream()), true);
-            br = new BufferedReader(new InputStreamReader(s.getInputStream()));
+            pw = new PrintWriter(new OutputStreamWriter(s.getOutputStream()), true); // create an auto-flushing writer to the client-side
+            br = new BufferedReader(new InputStreamReader(s.getInputStream())); // create a reader from the client-side
 
             while (true) { // continually listen for input
-                String inp = br.readLine();
-                if (inp == null) {
+                String inp = br.readLine(); // input
+                if (inp == null) { // in case of a disconnect
                     cleanup();
                     break;
                 }
-                System.out.println("> Received message from " + s.getInetAddress().getHostName() + ": " + inp);
-                String[] msg = inp.split(" ");
+                System.out.println("> Received message from " + s.getInetAddress().getHostName() + ": " + inp); // server message receiving input
+                String[] msg = inp.split(" "); // parsing step
                 if (msg[0].equals("REG")) { // registration msg
                     if (msg.length != 2) { // spaces
                         pw.println("ERR 2");
@@ -67,7 +66,7 @@ class Handler extends Thread {
                         System.out.println("> " + name + " on " + s.getInetAddress().getHostName() + ": registration successful.");
                     }
                 } else if (msg[0].equals("MESG")) { // msg to everyone
-                    if (name == null) {
+                    if (name == null) { // if no name yet, you are not registered, and thus cannot message anyone
                         pw.println("ERR 4");
                         System.out.println("> Unnamed user on " + s.getInetAddress().getHostName() + ": not registered.");
                     } else if (msg.length != 2) { // unknown format
@@ -82,7 +81,7 @@ class Handler extends Thread {
                         System.out.println("> " + name + " on " + s.getInetAddress().getHostName() + ": sent a message to everyone else.");
                     }
                 } else if (msg[0].equals("PMSG")) { // private msg
-                    if (name == null) {
+                    if (name == null) { // if no name yet, you are not registered, and thus cannot message anyone
                         pw.println("ERR 4");
                         System.out.println("> Unnamed user on " + s.getInetAddress().getHostName() + ": not registered.");
                     } else if (msg.length != 3) { // unknown format
@@ -95,7 +94,7 @@ class Handler extends Thread {
                         System.out.println("> " + name + " on " + s.getInetAddress().getHostName() + ": sent a message to " + msg[1] + ".");
                     }
                 } else if (msg[0].equals("EXIT")) { // de-registration msg
-                    if (name == null) {
+                    if (name == null) { // if no name yet, you are not registered, and thus cannot message anyone
                         pw.println("ERR 4");
                         System.out.println("> Unnamed user on " + s.getInetAddress().getHostName() + ": not registered.");
                     } else if (msg.length != 2) { // unknown format
@@ -116,7 +115,7 @@ class Handler extends Thread {
                         s.close();
                         break;
                     }
-                } else { // unknown format
+                } else { // any other case falls through to here
                     pw.println("ERR 4");
                 }
             }
@@ -125,8 +124,9 @@ class Handler extends Thread {
             cleanup();
         }
     }
-    private void cleanup() {
-        if (name != null && ChatServer.writerName.containsKey(name)) {
+    private void cleanup() { // in case of socket connection closing
+        // no need to close the PW and BR, as they close upon socket close
+        if (name != null && ChatServer.writerName.containsKey(name)) { // if there was a registered user and their name still exists in the list of users
             ChatServer.writerName.remove(name);
             for (String n : ChatServer.writerName.keySet()) { // Notify others
                 ChatServer.writerName.get(n).println("MSG SERVER L " + name);
